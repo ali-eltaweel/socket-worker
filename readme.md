@@ -21,11 +21,11 @@ $worker = new SocketWorker\SocketWorker(
 
         // ...
 
-        return new SocketWorker\Commands\SocketResponse(id: $command->id, status: true);
+        return new SocketWorker\Commands\SocketResponse(status: true, data: []);
     }
 );
 
-while (1) {
+while ($worker->status === SocketWorker\SocketWorkerStatus::Ready) {
     
     $worker->accept();
 }
@@ -43,5 +43,5 @@ $worker = new SocketWorker\SocketWorkerInterface(
 /**
  * @var SocketWorker\Commands\SocketResponse $response
  */
-$response = $worker->execute(new SocketWorker\Commands\SocketCommand('cmd'));
+$response = $worker->execute(new SocketWorker\Commands\SocketCommand('cmd', arguments: []));
 ```
