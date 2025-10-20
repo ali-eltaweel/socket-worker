@@ -1,6 +1,6 @@
 {
     "name": "ali-eltaweel/socket-worker",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Socket Worker",
     "maintainers": [
         {
@@ -10,7 +10,7 @@
     ],
     "require": {
         "php": "^8.1",
-        "ali-eltaweel/files": "^1.1.0",
+        "ali-eltaweel/files": "^1.1",
         "ali-eltaweel/computed-properties": "^1.0.0",
         "ali-eltaweel/codecs": "^1.0.0",
         "ali-eltaweel/serial-codec": "^1.0.0",
