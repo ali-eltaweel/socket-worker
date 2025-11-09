@@ -8,6 +8,8 @@ use Files\{ EncodedFile, Handles\SocketHandle, Socket };
 
 use Lang\{ Annotations\Computes, ComputedProperties };
 
+use Logger\{ EmitsLogs, IHasLogger, Logger };
+
 use Closure;
 
 /**
@@ -15,15 +17,26 @@ use Closure;
  * 
  * @api
  * @since 1.0.0
- * @version 1.0.0
+ * @version 1.1.0
  * @package socket-worker
  * @author Ali M. Kamel <ali.kamel.dev@gmail.com>
  * 
  * @property-read SocketWorkerStatus $status
  */
-class SocketWorker {
+class SocketWorker implements IHasLogger {
 
     use ComputedProperties;
+    use EmitsLogs;
+
+    /**
+     * The logger instance.
+     * 
+     * @internal
+     * @since 1.1.0
+     * 
+     * @var Logger|null $logger
+     */
+    protected ?Logger $logger = null;
 
     /**
      * The socket instance.
@@ -108,19 +121,60 @@ class SocketWorker {
     }
 
     /**
+     * Sets the logger instance.
+     * 
+     * @api
+     * @since 1.1.0
+     * @version 1.0.0
+     * 
+     * @param Logger|null $logger
+     * @return void
+     */
+    public function setLogger(?Logger $logger): void {
+
+        $this->logger = $logger;
+        $this->socket->setLogger($logger);
+        $this->socketHandle->setLogger($logger);
+        $this->statusFile->setLogger($logger);
+    }
+
+    /**
      * Retrieves the current status of the socket worker.
      * 
      * @api
      * @final
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      * 
      * @return SocketWorkerStatus|null
      */
     #[Computes('status')]
     public final function getStatus(): ?SocketWorkerStatus {
 
-        return $this->statusFile->path->exists() ? $this->statusFile->data : null;
+        $logUnit = static::class . '::' . __FUNCTION__;
+
+        $path = $this->statusFile->path;
+
+        $this->infoLog(fn () => [
+            'Getting status' => [ 'statusFilePath' => $path ]
+        ], $logUnit);
+
+        if (!$path->exists()) {
+            
+            $this->warningLog(fn () => [
+                'Status file not found' => [ 'statusFilePath' => $path ]
+            ], $logUnit);
+
+            return null;
+        }
+
+        $status = $this->statusFile->data;
+
+        $this->debugLog(fn () => [
+            'Getting status' => [ 'statusFilePath' => $path, 'status' => $status->name ]
+        ], $logUnit);
+
+        return $status;
     }
 
     /**
@@ -129,31 +183,62 @@ class SocketWorker {
      * @api
      * @final
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      * 
      * @return void
      */
     public final function accept(): void {
 
+        $logUnit = static::class . '::' . __FUNCTION__;
+
         $this->setStatus(SocketWorkerStatus::Waiting);
         
+        $this->infoLog(fn () => [
+            'Accepting new connection' => [ 'socket' => [ 'type' => $this->socketHandle::class, 'id' => spl_object_id($this->socketHandle) ] ]
+        ], $logUnit);
+
         $dispatcher = $this->socketHandle->accept();
+        $dispatcher->setLogger($this->logger);
+
+        $this->debugLog(fn () => [
+            'Connection accepted' => [ 'dispatcher' => [ 'type' => $dispatcher::class, 'id' => spl_object_id($dispatcher) ] ]
+        ], $logUnit);
         
         $this->setStatus(SocketWorkerStatus::Busy);
 
-        $response = ($this->commandHandler)(
-            $command = $this->commandsCodec->decode(
-                $dispatcher->read()
-            )
-        );
-        
-        $dispatcher->write(
-            $this->commandsCodec->encode($response)
-        );
+        $this->infoLog(fn () => [
+            'Reading command' => [ 'dispatcher' => [ 'type' => $dispatcher::class, 'id' => spl_object_id($dispatcher) ] ]
+        ], $logUnit);
+
+        $command = $this->commandsCodec->decode($dispatcher->read());
+
+        $this->infoLog(fn () => [
+            'Executing command' => [ 'command' => $command->toArray() ]
+        ], $logUnit);
+
+        $response = ($this->commandHandler)($command);
+
+        $this->infoLog(fn () => [
+            'Command executed' => [ 'command' => $command->toArray() ]
+        ], $logUnit);
+
+        $this->debugLog(fn () => [
+            'Command executed' => [ 'command' => $command->toArray(), 'response' => $response->toArray() ]
+        ], $logUnit);
+
+        $this->infoLog(fn () => [
+            'Writing response' => [ 'dispatcher' => [ 'type' => $dispatcher::class, 'id' => spl_object_id($dispatcher) ] ]
+        ], $logUnit);
+
+        $dispatcher->write($this->commandsCodec->encode($response));
 
         $dispatcher->close();
 
         if (!is_null($commandShutdown = $this->commandShutdown)) {
+
+            $this->infoLog(fn () => [
+                'Terminating command' => [ 'command' => $command->toArray(), 'response' => $response->toArray() ]
+            ], $logUnit);
 
             $commandShutdown($command, $response, $this->shutdown(...));
         }
@@ -166,17 +251,29 @@ class SocketWorker {
      * 
      * @internal
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      * 
      * @param SocketWorkerStatus $status
      * @return void
      */
     private function setStatus(SocketWorkerStatus $status): void {
 
+        $logUnit = static::class . '::' . __FUNCTION__;
+
+        $this->infoLog(fn () => [
+            'Setting status' => [ 'status' => $status->name ]
+        ], $logUnit);
+
         if ($this->statusFile->path->exists()) {
 
             $this->statusFile->data = $status;
+
+            $this->debugLog(fn () => [
+                'Status set' => [ 'status' => $status->name ]
+            ], $logUnit);
         }
+
+        $this->warningLog(fn () => [ 'Status file is not found' ], $logUnit);
     }
 
     /**
@@ -184,11 +281,15 @@ class SocketWorker {
      * 
      * @internal
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      * 
      * @return void
      */
     private function shutdown(): void {
+
+        $logUnit = static::class . '::' . __FUNCTION__;
+
+        $this->infoLog(fn () => [ 'Shutting down' ], $logUnit);
 
         $this->statusFile->remove();
 
@@ -198,5 +299,7 @@ class SocketWorker {
 
             $this->socket->remove();
         }
+
+        $this->infoLog(fn () => [ 'Wroker terminated' ], $logUnit);
     }
 }
