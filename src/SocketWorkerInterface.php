@@ -15,13 +15,13 @@ use Logger\{ EmitsLogs, IHasLogger, Logger };
  * 
  * @api
  * @since 1.0.0
- * @version 1.1.0
+ * @version 1.1.1
  * @package socket-worker
  * @author Ali M. Kamel <ali.kamel.dev@gmail.com>
  * 
  * @property-read SocketWorkerStatus $status
  */
-class SocketWorkerInterface {
+class SocketWorkerInterface implements IHasLogger {
 
     use ComputedProperties;
     use EmitsLogs;
@@ -107,7 +107,7 @@ class SocketWorkerInterface {
      * @api
      * @final
      * @since 1.0.0
-     * @version 1.1.0
+     * @version 1.1.1
      * 
      * @return SocketWorkerStatus|null
      */
@@ -134,7 +134,7 @@ class SocketWorkerInterface {
         $status = $this->statusFile->data;
 
         $this->debugLog(fn () => [
-            'Getting status' => [ 'statusFilePath' => $path, 'status' => $status->name ]
+            'Getting status' => [ 'statusFilePath' => $path, 'status' => $status?->name ]
         ], $logUnit);
 
         return $status;
